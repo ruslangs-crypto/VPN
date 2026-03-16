@@ -1,0 +1,46 @@
+# ANet VPN Server Configuration
+# Документация: https://github.com/ZeroTworu/anet/blob/master/contrib/docs/anet.ru.md
+
+[main]
+# Адрес и порт для прослушивания (UDP)
+listen = "0.0.0.0:443"
+
+# Имя TUN-интерфейса
+if_name = "tun0"
+
+# IP-адрес сервера в VPN-сети
+address = "10.10.0.1/24"
+
+[keys]
+# Приватный ключ сервера (генерируется через: anet-keygen server)
+private_key = "<ВСТАВЬТЕ_ПРИВАТНЫЙ_КЛЮЧ_СЕРВЕРА>"
+
+# Публичный ключ сервера
+public_key = "<ВСТАВЬТЕ_ПУБЛИЧНЫЙ_КЛЮЧ_СЕРВЕРА>"
+
+[tls]
+# TLS-сертификат для QUIC транспорта
+# Генерация: make cert  или  openssl req -x509 -newkey ed25519 ...
+cert = """
+<ВСТАВЬТЕ_СОДЕРЖИМОЕ_cert.pem>
+"""
+
+key = """
+<ВСТАВЬТЕ_СОДЕРЖИМОЕ_key.pem>
+"""
+
+[clients]
+# Режим 1: Локальный список (без auth-сервера)
+# Fingerprint клиентов (SHA256 от публичного ключа Ed25519)
+# Генерация: anet-keygen client -> берём fingerprint
+allowed_clients = [
+    # "fingerprint_клиента_1",
+    # "fingerprint_клиента_2",
+]
+
+# Режим 2: Внешний сервер авторизации (anet-auth)
+# auth_servers = ["http://127.0.0.1:3000/api/v1"]
+
+[security]
+# Размер блока паддинга (для маскировки размера пакетов)
+# padding_step = 64

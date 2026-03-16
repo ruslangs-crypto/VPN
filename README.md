@@ -1,87 +1,132 @@
-# SSTP VPN Server
+# ANet VPN Server (ASTP Protocol)
 
-SSTP (Secure Socket Tunneling Protocol) VPN-сервер на базе SoftEther.
+Скрипты для развёртывания [ANet](https://github.com/ZeroTworu/anet) VPN-сервера с протоколом ASTP.
+
+**ASTP** (ANet Secure Transport Protocol) — собственный транспортный протокол ANet:
+- ChaCha20/Poly1305 + X25519 + Ed25519
+- Четырёхфазный хэндшейк (DH + double ratchet)
+- Трафик неотличим от случайного UDP (каждый пакет начинается с 12-байтного nonce)
+- Устойчив к высокой потере пакетов
 
 ## Быстрый старт
 
 ```bash
-# Установка (от root)
-sudo bash setup-sstp.sh install
+# 1. Установка (от root)
+sudo bash setup-anet.sh install
 
-# Добавить пользователя
-sudo bash setup-sstp.sh add-user myuser mypassword
+# 2. Сгенерировать ключи сервера
+/opt/anet/anet-keygen server
 
-# Статус
-sudo bash setup-sstp.sh status
+# 3. Сгенерировать ключи клиента
+/opt/anet/anet-keygen client
 
-# Удаление
-sudo bash setup-sstp.sh uninstall
+# 4. Вставить ключи и TLS-сертификат в конфиг
+sudo nano /etc/anet/server.toml
+
+# 5. Добавить fingerprint клиента в allowed_clients
+
+# 6. Запустить
+sudo systemctl start anet-server
+sudo systemctl status anet-server
 ```
-
-## Требования
-
-- Ubuntu 20.04+ / Debian 11+
-- Root доступ
-- Открытый порт 443 (TCP)
 
 ## Структура
 
 ```
 .
-├── setup-sstp.sh           # Основной скрипт установки
+├── setup-anet.sh              # Скрипт установки сервера
 ├── config/
-│   ├── server.conf         # Конфигурация сервера
-│   └── firewall-rules.sh   # Правила iptables
+│   ├── server.toml            # Шаблон конфига сервера
+│   ├── client.toml            # Шаблон конфига клиента
+│   ├── firewall.sh            # Правила iptables
+│   ├── docker-compose.yml     # PostgreSQL для anet-auth
+│   └── .env.example           # Переменные окружения для БД
 └── README.md
+```
+
+## Требования
+
+- Linux (Ubuntu 20.04+ / Debian 11+)
+- Root доступ
+- Открытый порт 443/UDP
+
+## Настройка сервера
+
+### 1. Генерация ключей
+
+```bash
+# Ключи сервера
+/opt/anet/anet-keygen server
+# Выведет: private_key, public_key
+
+# Ключи клиента
+/opt/anet/anet-keygen client
+# Выведет: private_key, public_key, fingerprint
+```
+
+### 2. TLS-сертификат (для QUIC)
+
+```bash
+openssl req -x509 -newkey ed25519 \
+    -keyout key.pem -out cert.pem \
+    -days 365 -nodes -subj "/CN=anet" \
+    -addext "subjectAltName = DNS:anet" \
+    -addext "basicConstraints=critical,CA:FALSE" \
+    -addext "keyUsage=digitalSignature,keyEncipherment"
+```
+
+### 3. Конфигурация server.toml
+
+Вставьте в `/etc/anet/server.toml`:
+- Приватный/публичный ключ сервера в `[keys]`
+- Содержимое cert.pem и key.pem в `[tls]`
+- Fingerprint клиентов в `allowed_clients`
+
+### 4. Файрвол
+
+```bash
+sudo bash config/firewall.sh
 ```
 
 ## Подключение клиента
 
-### Windows
-1. Параметры → Сеть → VPN → Добавить VPN-подключение
-2. Поставщик: Windows (встроенный)
-3. Тип: SSTP
-4. Адрес: IP вашего сервера
-5. Логин/пароль: из `setup-sstp.sh add-user`
-
 ### Linux
 ```bash
-sudo apt install sstp-client ppp
-sudo sstpc --server <IP>:443 --user <user> --password <pass> \
-    --ca-cert /path/to/server.crt usepeerdns require-mschap-v2 noauth
+# Скачать клиент
+wget https://github.com/ZeroTworu/anet/releases/download/v0.5.1/client-linux-amd64_0.5.1.zip
+
+# Заполнить client.toml
+# Запустить (от root)
+sudo ./anet-client -c client.toml
 ```
 
-### macOS
-Используйте SoftEther VPN Client или iSSTP из App Store.
+### Windows
+Скачайте установщик: [ANET_VPN_Client_Setup](https://github.com/ZeroTworu/anet/releases)
 
-## Конфигурация
+### Android
+APK доступен на [странице релизов](https://github.com/ZeroTworu/anet/releases).
 
-Основные параметры в `config/server.conf`:
-- `VPN_PORT` — порт сервера (по умолчанию 443)
-- `VPN_SUBNET` — подсеть для клиентов
-- `DNS_PRIMARY` / `DNS_SECONDARY` — DNS серверы
-- `MAX_CONNECTIONS` — макс. подключений
+## Режим anet-auth (опционально)
 
-## SSL-сертификат
-
-По умолчанию создаётся самоподписанный сертификат. Для продакшена:
+Вместо ручного добавления fingerprint-ов можно использовать сервер авторизации:
 
 ```bash
-# Let's Encrypt
-apt install certbot
-certbot certonly --standalone -d vpn.example.com
+# Поднять PostgreSQL
+cd config && docker-compose up -d
 
-# Указать в server.conf:
-# SSL_CERT_PATH=/etc/letsencrypt/live/vpn.example.com/fullchain.pem
-# SSL_KEY_PATH=/etc/letsencrypt/live/vpn.example.com/privkey.pem
+# Добавить пользователя
+/opt/anet/anet-auth -a username
+
+# В server.toml:
+# auth_servers = ["http://127.0.0.1:3000/api/v1"]
 ```
 
 ## Управление
 
 ```bash
-systemctl start sstp-vpn    # Запуск
-systemctl stop sstp-vpn     # Остановка
-systemctl restart sstp-vpn  # Перезапуск
-systemctl status sstp-vpn   # Статус
-journalctl -u sstp-vpn -f   # Логи
+sudo systemctl start anet-server     # Запуск
+sudo systemctl stop anet-server      # Остановка
+sudo systemctl restart anet-server   # Перезапуск
+sudo systemctl status anet-server    # Статус
+sudo journalctl -u anet-server -f    # Логи
 ```

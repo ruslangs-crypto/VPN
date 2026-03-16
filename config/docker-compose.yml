@@ -1,0 +1,19 @@
+# Docker Compose для anet-auth (сервер авторизации)
+# Используйте если хотите управлять пользователями через anet-auth
+# вместо ручного добавления fingerprint-ов в server.toml
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-anet}
+      POSTGRES_USER: ${POSTGRES_USER:-anet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+
+volumes:
+  pgdata:

@@ -1,0 +1,16 @@
+# ANet VPN Client Configuration
+# Документация: https://github.com/ZeroTworu/anet/blob/master/contrib/docs/anet.ru.md
+
+[main]
+# Адрес сервера (IP:порт)
+server = "<IP_СЕРВЕРА>:443"
+
+# IP-адрес клиента в VPN-сети
+address = "10.10.0.2/24"
+
+[keys]
+# Приватный ключ клиента (генерируется через: anet-keygen client)
+private_key = "<ВСТАВЬТЕ_ПРИВАТНЫЙ_КЛЮЧ_КЛИЕНТА>"
+
+# Публичный ключ СЕРВЕРА (не клиента!)
+server_public_key = "<ВСТАВЬТЕ_ПУБЛИЧНЫЙ_КЛЮЧ_СЕРВЕРА>"
